@@ -73,7 +73,7 @@ def doOCR(img,out_path):
             line_num=ln
         
         #if level==WORD_LEVEL: conf is check for word level
-        if int(cnf)>50:
+        if int(cnf)>40:
             cur_line['words'].append({'box':bb, 'text':text})
 
     addLine(cur_line,cur_para)
@@ -92,5 +92,5 @@ for root,dirs,files in os.walk(start_dir):
     for file_name in files:
         if file_name.endswith('.png'):
             image_path = os.path.join(root,file_name)
-            json_path = os.path.join(root,file_name.replace('.png','.json'))
+            json_path = os.path.join(root,file_name.replace('.png','.ocr.json'))
             doOCR(image_path,json_path)
