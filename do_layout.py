@@ -4,11 +4,15 @@ import numpy as np
 import sys, json, os
 from collections import defaultdict
 
-model1 = lp.Detectron2LayoutModel('lp://PubLayNet/mask_rcnn_X_101_32x8d_FPN_3x/config',
+model1 = lp.Detectron2LayoutModel(
+    'models/PubLayNet.yaml',
+    'models/PubLayNet.pth',
     extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
     label_map={0: "Text", 1: "Title", 2: "List", 3:"Table", 4:"Figure"},
     enforce_cpu=False)
-model2 = lp.Detectron2LayoutModel('lp://PrimaLayout/mask_rcnn_R_50_FPN_3x/config',
+model2 = lp.Detectron2LayoutModel(#'lp://PrimaLayout/mask_rcnn_R_50_FPN_3x/config',
+    'models/PrimaLayout.yaml',
+    'models/PrimaLayout.pth',
     extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
     label_map={1:"TextRegion", 2:"ImageRegion", 3:"TableRegion", 4:"MathsRegion", 5:"SeparatorRegion", 6:"OtherRegion"},
     enforce_cpu=False)
@@ -41,6 +45,9 @@ def computeCovered(bb,bybb):
 def redoLayout(image_path,draw=False):
     json_path = image_path.replace('.png','.ocr.json')
     out_path = image_path.replace('.png','.json')
+
+    if os.path.exists(out_path):
+        return
 
     image = img_f.imread(image_path)
     if draw:
@@ -153,7 +160,13 @@ def redoLayout(image_path,draw=False):
         else:
             new_blocks[best].append(line)
 
-    assert len(unadded)==0
+    #assert len(unadded)==0
+    if len(unadded)>0:
+        print('{} had {} unadded'.format(image_path,len(unadded)))
+    i=len(boxes)+1000
+    for line in unadded:
+        new_blocks[i].append(line)
+        i+=1
     #import pdb;pdb.set_trace()
     if draw:
         image = orig_image
