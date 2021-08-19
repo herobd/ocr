@@ -38,7 +38,7 @@ def computeCovered(bb,bybb):
     return i/a
 
 
-def redoLayout(image_path,draw=False):
+def redoLayout(image_path,draw=False,save=True):
     json_path = image_path.replace('.png','.ocr.json')
     out_path = image_path.replace('.png','.json')
 
@@ -189,8 +189,9 @@ def redoLayout(image_path,draw=False):
                 }]
             })
     ocr['blocks']=blocks
-    with open(out_path,'w') as f:
-        json.dump(ocr,f,indent=2)
+    if save:
+        with open(out_path,'w') as f:
+            json.dump(ocr,f,indent=2)
 
     #for line in unadded:
     #    x1,y1,x2,y2 = line['box']
@@ -204,8 +205,11 @@ def redoLayout(image_path,draw=False):
 
 start_dir=sys.argv[1]
 
-for root,dirs,files in os.walk(start_dir):
-    for file_name in files:
-        if file_name.endswith('.png'):
-            image_path = os.path.join(root,file_name)
-            redoLayout(image_path)
+if start_dir.endswith('.png'):
+    redoLayout(start_dir,draw=True,save=False)
+else:
+    for root,dirs,files in os.walk(start_dir):
+        for file_name in files:
+            if file_name.endswith('.png'):
+                image_path = os.path.join(root,file_name)
+                redoLayout(image_path)
