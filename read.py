@@ -8,6 +8,8 @@ PARA_LEVEL=3
 LINE_LEVEL=4
 WORD_LEVEL=5
 
+THRESHOLD=45
+
 def addBlock(cur_block,blocks):
     if len(cur_block['paragraphs'])>0:
         blocks.append(cur_block)
@@ -74,7 +76,7 @@ def doOCR(img,out_path):
         
         #if level==WORD_LEVEL: conf is check for word level
         text = text.strip()
-        if int(cnf)>40 and len(text)>0: #confidence threshold, and more than just whitespace
+        if int(cnf)>THRESHOLD and len(text)>0: #confidence threshold, and more than just whitespace
             cur_line['words'].append({'box':bb, 'text':text})
 
     addLine(cur_line,cur_para)
