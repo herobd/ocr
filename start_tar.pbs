@@ -1,0 +1,26 @@
+#!/bin/bash
+
+TAR=a.b
+
+python make_run_untar.py $TAR
+sbatch runs/run_untar_$TAR.pbs | tee $TAR.tmp
+
+list=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+
+for x in ${list[@]}; do
+    SEC=$TAR.$x
+    echo $SEC
+
+    python make_run_convert.py $SEC
+    #cd ~/compute
+    #tar -xf tars/images.#SEC.tar
+    #cd ~/ocr
+    sbatch runs/run_convert_$SEC.pbs  | tee $SEC.tmp
+    python make_run_ocr.py $SEC
+    sbatch runs/run_ocr_$SEC.pbs | tee $SEC.tmp
+    python make_run_layout.py $SEC
+    sbatch runs/run_layout_$SEC.pbs
+    rm $SEC.tmp
+    #rm ~/compute/out/$SEC/*tmp
+done
+rm $TAR.tmp

@@ -42,16 +42,20 @@ def computeCovered(bb,bybb):
     return i/a
 
 
-def redoLayout(image_path,draw=False):
+def redoLayout(image_path,draw=False,save=True):
     json_path = image_path.replace('.png','.ocr.json')
     out_path = image_path.replace('.png','.json')
 
-    if os.path.exists(out_path):
+    if os.path.exists(out_path) and save:
+        return
+    with open(json_path) as f:
+        ocr = json.load(f)
+    if len(ocr['blocks'])==0:
+        os.system('cp {} {}'.format(json_path,out_path))
         return
 
     image = img_f.imread(image_path)
-    if draw:
-        orig_image = image
+    orig_image = image
     width = image.shape[1]
     scale = 600/width
     image = img_f.resize(image,fx=scale,fy=scale,dim=[0,0]).astype(np.uint8)
@@ -68,7 +72,8 @@ def redoLayout(image_path,draw=False):
         x2 = thing.block.x_2
         y2 = thing.block.y_2
         #img_f.rectangle(image,(x1,y1),(x2,y2),color,2)
-        primary_boxes.append((x1,y1,x2,y2))
+        if thing.type!='Figure':
+            primary_boxes.append((x1,y1,x2,y2))
 
 
     layout = model2.detect(image)
@@ -91,7 +96,8 @@ def redoLayout(image_path,draw=False):
         #            break
         ##img_f.rectangle(image,(x1,y1),(x2,y2),color,2)
         #if not overlap:
-        secondary_boxes.append((x1,y1,x2,y2))
+        if thing.type!='ImageRegion':
+            secondary_boxes.append((x1,y1,x2,y2))
         #    remove.reverse()
             #for r in remove:
             #    del primary_boxes[r]
@@ -101,15 +107,21 @@ def redoLayout(image_path,draw=False):
     boxes/=scale
     boxes = boxes.tolist()
 
-    with open(json_path) as f:
-        ocr = json.load(f)
 
     remove_boxes=[]
     ocr_lines = []
+    masked = np.zeros(orig_image.shape)
     for block in ocr['blocks']:
         boxes.append(block['box'])
         for para in block['paragraphs']:
             ocr_lines += para['lines']
+            for line in para['lines']:
+                for word in line['words']:
+                    l,t,r,b = word['box']
+                    masked[t:b,l:r]=1
+    if len(ocr_lines)==0:
+        os.system('cp {} {}'.format(json_path,out_path))
+        return
 
         #for i,bb in enumerate(boxes):
         #    iou = computeIOU(block['box'],bb)
@@ -129,12 +141,40 @@ def redoLayout(image_path,draw=False):
     boxes.sort(key=lambda bb:(bb[2]-bb[0])*(bb[3]-bb[1]), reverse=True)
 
     block_votes = defaultdict(int)
+    sum_votes=0
     for line in ocr_lines:
         added=False
         for i,bb in enumerate(boxes):
             covered = computeCovered(line['box'],bb)
             if covered>0.3:
                 block_votes[i]+=1
+                sum_votes+=1
+    mean_votes = sum_votes/len(boxes)
+    #print('mean votes: {}'.format(mean_votes))
+
+    block_fillspace = []
+    for bb in boxes:
+        a=(bb[2]-bb[0])*(bb[3]-bb[1])
+        block_fillspace.append(masked[int(bb[1]):int(bb[3]),int(bb[0]):int(bb[2])].sum()/a)
+
+    scores=[None]*len(boxes)
+    #fill_scores=[None]*len(boxes)
+    #vote_scores=[None]*len(boxes)
+    for i in range(len(boxes)):
+        fillpart = min(block_fillspace[i],0.5) 
+        #print(block_votes[i]/len(ocr_lines))
+        if block_votes[i]/len(ocr_lines) > 0.9 and mean_votes>2:
+            votepart=0#remove super-regions
+        elif len(ocr_lines)>1:
+            votepart = 1.25*min((block_votes[i]-1)/(len(ocr_lines)-1),0.2)
+        else:
+            votepart = 1
+        #votepart = 0.33*min(block_votes[i],5)/min(len(ocr_lines),5)
+
+        scores[i] = fillpart+votepart
+        #fill_scores[i] = fillpart
+        #vote_scores[i] = votepart
+        #print('{}  {}  : {} = {} + {}'.format(i,boxes[i],scores[i],fillpart,votepart))
 
     new_blocks = defaultdict(list)
     unadded=[]
@@ -142,7 +182,7 @@ def redoLayout(image_path,draw=False):
         added=False
         #print(line['text'])
         best=-1
-        best_votes=-1
+        best_score=-1
         for i,bb in enumerate(boxes):
             covered = computeCovered(line['box'],bb)
             #print('{} c {} : {}'.format(line['box'],bb,covered))
@@ -150,21 +190,54 @@ def redoLayout(image_path,draw=False):
                 #new_blocks[i].append(line)
                 #added=True
                 #break
-                if best_votes<block_votes[i]:
-                    best_votes = block_votes[i]
+                score = scores[i]
+                if best_score<score:
+                    best_score = score
                     best=i
-        if best_votes==-1:
+        #print('best score for {} is {} {} = {} + {}'.format(line['text'],best,best_score,block_fillspace[best], block_votes[best]/len(ocr_lines)))
+        if best_score==-1:
             
             #print('---not added')
             unadded.append(line)
         else:
             new_blocks[best].append(line)
 
+    #collapse block boundaries to assigned lines
+    for i,lines in new_blocks.items():
+        min_x,min_y,max_x,max_y = lines[0]['box']
+        for line in lines[1:]:
+            x1,y1,x2,y2 = line['box']
+            min_x = min(min_x,x1)
+            max_x = max(max_x,x2)
+            min_y = min(min_y,y1)
+            max_y = max(max_y,y2)
+        boxes[i]=(min_x,min_y,max_x,max_y)
+
+    eaten_by={}
+    for i,lines in new_blocks.items():
+        m_score=-1
+        eater=None
+        for ii in new_blocks.keys():
+            if i==ii:
+                continue
+            if computeCovered(boxes[i],boxes[ii])>0.91 and (boxes[i][3]-boxes[i][1])*(boxes[i][2]-boxes[i][0]) < (boxes[ii][3]-boxes[ii][1])*(boxes[ii][2]-boxes[ii][0]):
+                if scores[ii]>m_score:
+                    m_score = scores[ii]
+                    eater=ii
+        if eater is not None:
+            #print('{} eats {}'.format(eater,i))
+            eaten_by[i]=eater
+
+    for eaten,eater in eaten_by.items():
+        new_blocks[eater]+=new_blocks[eaten]
+        del new_blocks[eaten]
+
     #assert len(unadded)==0
     if len(unadded)>0:
         print('{} had {} unadded'.format(image_path,len(unadded)))
     i=len(boxes)+1000
     for line in unadded:
+        #print('new block for: {}'.format(line['text']))
         new_blocks[i].append(line)
         i+=1
     #import pdb;pdb.set_trace()
@@ -172,6 +245,7 @@ def redoLayout(image_path,draw=False):
         image = orig_image
         if len(image.shape)==2:
             image = np.stack((image,image,image),axis=2)
+
         for i,bb in enumerate(boxes):
             x1,y1,x2,y2 = bb
             if i < len(primary_boxes):
@@ -192,7 +266,7 @@ def redoLayout(image_path,draw=False):
             min_y = min(min_y,y1)
             max_y = max(max_y,y2)
         if draw:
-            img_f.rectangle(image,(min_x,min_y),(max_x,max_y),(0,0,255),5)
+            img_f.rectangle(image,(min_x,min_y),(max_x,max_y),(0,0,255),7)
 
         blocks.append({
             'box':(min_x,min_y,max_x,max_y),
@@ -202,8 +276,9 @@ def redoLayout(image_path,draw=False):
                 }]
             })
     ocr['blocks']=blocks
-    with open(out_path,'w') as f:
-        json.dump(ocr,f,indent=2)
+    if save:
+        with open(out_path,'w') as f:
+            json.dump(ocr,f,indent=2)
 
     #for line in unadded:
     #    x1,y1,x2,y2 = line['box']
@@ -217,8 +292,11 @@ def redoLayout(image_path,draw=False):
 
 start_dir=sys.argv[1]
 
-for root,dirs,files in os.walk(start_dir):
-    for file_name in files:
-        if file_name.endswith('.png'):
-            image_path = os.path.join(root,file_name)
-            redoLayout(image_path)
+if start_dir.endswith('.png'):
+    redoLayout(start_dir,draw=True,save=False)
+else:
+    for root,dirs,files in os.walk(start_dir):
+        for file_name in files:
+            if file_name.endswith('.png'):
+                image_path = os.path.join(root,file_name)
+                redoLayout(image_path)
