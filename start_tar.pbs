@@ -1,26 +1,47 @@
 #!/bin/bash
 
-TAR=a.b
+ROOT=a
+mkdir ~/compute/out$ROOT
 
-python make_run_untar.py $TAR
-sbatch runs/run_untar_$TAR.pbs | tee $TAR.tmp
+#listR=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+listR=(a b c f g h i j k l m n o p q r s t u v w x y z)
+#listR=(a b c f g)
+#listR=(h i j k l m n)
+#listR=(o p q r s t u)
+#listR=(v w x y z)
+#listR=(1 2)
 
-list=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+for SUBROOT in ${listR[@]}; do
 
-for x in ${list[@]}; do
-    SEC=$TAR.$x
-    echo $SEC
+    TAR=$ROOT.$SUBROOT
+    mkdir ~/compute/out$ROOT/$TAR
+    
 
-    python make_run_convert.py $SEC
-    #cd ~/compute
-    #tar -xf tars/images.#SEC.tar
-    #cd ~/ocr
-    sbatch runs/run_convert_$SEC.pbs  | tee $SEC.tmp
-    python make_run_ocr.py $SEC
-    sbatch runs/run_ocr_$SEC.pbs | tee $SEC.tmp
-    python make_run_layout.py $SEC
-    sbatch runs/run_layout_$SEC.pbs
-    rm $SEC.tmp
-    #rm ~/compute/out/$SEC/*tmp
+    python make_run_untar.py $TAR BRIDGE.tmp
+    sbatch runs/run_untar_$TAR.pbs > $TAR.tmp
+
+    list=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
+    #list=(1 2)
+
+    for x in ${list[@]}; do
+        SEC=$TAR.$x
+
+        python make_run_convert.py $SEC
+        #cd ~/compute
+        #tar -xf tars/images.#SEC.tar
+        #cd ~/ocr
+        sbatch runs/run_convert_$SEC.pbs  > $SEC.tmp
+        python make_run_ocr.py $SEC
+        sbatch runs/run_ocr_$SEC.pbs > $SEC.tmp
+        python make_run_layout.py $SEC
+        sbatch runs/run_layout_$SEC.pbs >> $TAR.final.tmp
+        rm $SEC.tmp
+        #rm ~/compute/out/$SEC/*tmp
+        echo "start $SEC"
+    done
+    python make_run_dotar.py $TAR
+    sbatch runs/run_dotar_$TAR.pbs > BRIDGE.tmp
+    rm $TAR.final.tmp
+    rm $TAR.tmp
 done
-rm $TAR.tmp
+rm BRIDGE.tmp

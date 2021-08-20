@@ -1,15 +1,14 @@
 script_template="""#!/bin/bash
 
 #SBATCH --dependency=afterok:{}
-#SBATCH --time=10:00:00   # walltime
+#SBATCH --time=1:00:00   # walltime
 #SBATCH --nice
 #SBATCH --ntasks=2
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
 #SBATCH -J "convert {}"
-#SBATCH --mem-per-cpu=8048M
+#SBATCH --mem-per-cpu=12048M
 #SBATCH --mail-user=herobd@gmail.com   # email address
-#SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
 #xxSBATCH --qos=standby   
 #xxSBATCH --requeue
@@ -43,7 +42,7 @@ sec = sys.argv[1]
 a,b,c = sec.split('.')
 
 untarred_dir = '../compute/images{}/{}/{}/{}'.format(a,a,b,c)
-out_dir = '~/compute/out/{}'.format(sec)
+out_dir = '~/compute/out{}/{}.{}/{}'.format(a,a,b,sec)
 
 last_job = '../ocr/{}.{}.tmp'.format(a,b)
 
@@ -53,7 +52,7 @@ with open(last_job) as f:
 job_info=job_info.strip()
 job_info = job_info.split(' ')
 last_job_id=job_info[-1]
-print('convert depends on {}'.format(last_job_id))
+#print('convert depends on {}'.format(last_job_id))
 
 #if not os.path.exists(untarred_dir):
 #    add = 'tar -xf tars/images.{}.tar'.format(sec)

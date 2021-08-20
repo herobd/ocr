@@ -3,13 +3,12 @@ script_template="""#!/bin/bash
 #SBATCH --dependency=afterok:{}
 #SBATCH --time=10:00:00   # walltime
 #SBATCH --nice
-#SBATCH --ntasks=6
+#SBATCH --ntasks=11
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
 #SBATCH -J "ocr {}"
 #SBATCH --mem-per-cpu=8048M
 #SBATCH --mail-user=herobd@gmail.com   # email address
-#SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
 #xxSBATCH --qos=standby   
 #xxSBATCH --requeue
@@ -37,8 +36,9 @@ python read.py {}
 """
 import sys
 sec = sys.argv[1]
+a,b,c = sec.split('.')
 
-out_dir = '~/compute/out/{}'.format(sec)
+out_dir = '~/compute/out{}/{}.{}/{}'.format(a,a,b,sec)
 last_job = '../ocr/{}.tmp'.format(sec)
 
 with open(last_job) as f:
@@ -47,7 +47,7 @@ with open(last_job) as f:
 job_info=job_info.strip()
 job_info = job_info.split(' ')
 last_job_id=job_info[-1]
-print('ocr depends on {}'.format(last_job_id))
+#print('ocr depends on {}'.format(last_job_id))
 
 
 script = script_template.format(last_job_id,sec,out_dir)

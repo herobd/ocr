@@ -2,6 +2,7 @@ import pytesseract
 from pytesseract import Output
 from collections import defaultdict
 import json, sys, os
+from multiprocessing import Pool, TimeoutError
 PAGE_LEVEL=1
 BLOCK_LEVEL=2
 PARA_LEVEL=3
@@ -94,55 +95,67 @@ def doOCR(img,out_path):
         json.dump({'height':image_h,'width':image_w,'blocks':blocks},f,indent=2)
     return confs_sum/confs_count if confs_count>0 else 0
 
+def doFull(x):
+    image_path,json_path=x
+    conf=doOCR(image_path,json_path)
+    #print('{} conf: {}'.format(file_name,conf))
+    if conf<55: # we probably have a rotated image on our hands
+
+        #try rotating 90, 270, and 180
+        conf180=conf270=-1
+        os.system('convert {} -rotate 90 {}'.format(image_path,image_path+'.90.tmp'))
+        conf90=doOCR(image_path+'.90.tmp',json_path+'.90.tmp')
+        if conf90<80: #cut short if hight enough conf (speed)
+            os.system('convert {} -rotate 270 {}'.format(image_path,image_path+'.270.tmp'))
+            conf270=doOCR(image_path+'.270.tmp',json_path+'.270.tmp')
+            if conf270<80:
+                os.system('convert {} -rotate 180 {}'.format(image_path,image_path+'.180.tmp'))
+                conf180=doOCR(image_path+'.180.tmp',json_path+'.180.tmp')
+
+        #print('{} 90 conf: {}'.format(file_name,conf90))
+
+        best = max(conf,conf90,conf180,conf270) #select best rotation
+        #then move the tmp files to the permenats, (replace json and png)
+        if best==conf90:
+            os.system('mv {} {}'.format(json_path+'.90.tmp',json_path))
+            os.system('mv {} {}'.format(image_path+'.90.tmp',image_path))
+        elif best==conf180:
+            os.system('mv {} {}'.format(json_path+'.180.tmp',json_path))
+            os.system('mv {} {}'.format(image_path+'.180.tmp',image_path))
+        elif best==conf270:
+            os.system('mv {} {}'.format(json_path+'.270.tmp',json_path))
+            os.system('mv {} {}'.format(image_path+'.270.tmp',image_path))
+        ##print('do rm? not ({} and {} and {})'.format(best==conf90,conf180==-1 ,conf270==-1))
+        toremove=[]
+        if best!=conf90:
+            toremove+=[json_path+'.90.tmp',image_path+'.90.tmp']
+        if best!=conf180 and conf180!=-1:
+            toremove+=[json_path+'.180.tmp',image_path+'.180.tmp']
+        if best!=conf270 and conf270!=-1:
+            toremove+=[json_path+'.270.tmp',image_path+'.270.tmp']
+            
+        #    #print('rm {}/*tmp'.format(root))
+        #    os.system('rm {}'.format(os.path.join(root,'*tar'))) #clean up
+        for tr in toremove:
+             os.system('rm {}'.format(tr))
+        conf=best
+    return conf
+
+
 
 start_dir=sys.argv[1]
 
+todo=[]
 for root,dirs,files in os.walk(start_dir):
     for file_name in files:
         if file_name.endswith('.png'):
             image_path = os.path.join(root,file_name)
             json_path = os.path.join(root,file_name.replace('.png','.ocr.json'))
             if not os.path.exists(json_path):
-                conf=doOCR(image_path,json_path)
-                #print('{} conf: {}'.format(file_name,conf))
-                if conf<55: # we probably have a rotated image on our hands
+                todo.append((image_path,json_path))
 
-                    #try rotating 90, 270, and 180
-                    conf180=conf270=-1
-                    os.system('convert {} -rotate 90 {}'.format(image_path,image_path+'.90.tmp'))
-                    conf90=doOCR(image_path+'.90.tmp',json_path+'.90.tmp')
-                    if conf90<80: #cut short if hight enough conf (speed)
-                        os.system('convert {} -rotate 270 {}'.format(image_path,image_path+'.270.tmp'))
-                        conf270=doOCR(image_path+'.270.tmp',json_path+'.270.tmp')
-                        if conf270<80:
-                            os.system('convert {} -rotate 180 {}'.format(image_path,image_path+'.180.tmp'))
-                            conf180=doOCR(image_path+'.180.tmp',json_path+'.180.tmp')
-
-                    #print('{} 90 conf: {}'.format(file_name,conf90))
-
-                    best = max(conf,conf90,conf180,conf270) #select best rotation
-                    #then move the tmp files to the permenats, (replace json and png)
-                    if best==conf90:
-                        os.system('mv {} {}'.format(json_path+'.90.tmp',json_path))
-                        os.system('mv {} {}'.format(image_path+'.90.tmp',image_path))
-                    elif best==conf180:
-                        os.system('mv {} {}'.format(json_path+'.180.tmp',json_path))
-                        os.system('mv {} {}'.format(image_path+'.180.tmp',image_path))
-                    elif best==conf270:
-                        os.system('mv {} {}'.format(json_path+'.270.tmp',json_path))
-                        os.system('mv {} {}'.format(image_path+'.270.tmp',image_path))
-                    ##print('do rm? not ({} and {} and {})'.format(best==conf90,conf180==-1 ,conf270==-1))
-                    toremove=[]
-                    if best!=conf90:
-                        toremove+=[json_path+'.90.tmp',image_path+'.90.tmp']
-                    if best!=conf180 and conf180!=-1:
-                        toremove+=[json_path+'.180.tmp',image_path+'.180.tmp']
-                    if best!=conf270 and conf270!=-1:
-                        toremove+=[json_path+'.270.tmp',image_path+'.270.tmp']
-                        
-                    #    #print('rm {}/*tmp'.format(root))
-                    #    os.system('rm {}'.format(os.path.join(root,'*tar'))) #clean up
-                    for tr in toremove:
-                         os.system('rm {}'.format(tr))
-
-
+pool = Pool(processes=10)
+chunk = 5
+created = pool.imap_unordered(doFull, todo, chunksize=chunk)
+for score in created:
+    pass
