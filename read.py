@@ -132,12 +132,14 @@ def doOCR(img,out_path,Rotation=0):
             line_num=ln
         
         
-        if level==WORD_LEVEL: 
-            confs_sum += cnf
-            confs_count += 1
-            text = text.strip()
-            w_to_h_sum += w/h if h>0 else w
-            if int(cnf)>THRESHOLD and len(text)>0 and len(text.replace('-',''))>0: #confidence threshold, and more than just whitespace or line
+        if level==WORD_LEVEL:
+            if len(text.replace('-','').replace(' ',''))>0:
+                confs_sum += cnf
+                confs_count += 1
+                text = text.strip()
+                w_to_h_sum += w/h if h>0 else w
+                print(text,cnf)
+            if int(cnf)>THRESHOLD and len(text)>0 and len(text.replace('-','').replace(' ',''))>0: #confidence threshold, and more than just whitespace or line
                 cur_line['words'].append({'box':bb, 'text':text})
 
     addLine(cur_line,cur_para)
@@ -184,7 +186,12 @@ def doFull(x):
 
         best = max(conf,conf90,conf180,conf270) #select best rotation
         #then move the tmp files to the permenats, (replace json and png)
-        if best==conf90:
+        if best<55: #remove low confidence images (also no words)
+            os.system('rm {}'.format(image_path))
+            os.system('rm {}'.format(json_path))
+            best=-1
+
+        elif best==conf90:
             assert os.path.exists(json_path+'.90.tmp')
             assert os.path.exists(image_path+'.90.tmp')
             os.system('mv {} {}'.format(json_path+'.90.tmp',json_path))
@@ -213,6 +220,7 @@ def doFull(x):
         for tr in toremove:
              os.system('rm {}'.format(tr))
         conf=best
+
     return conf
 
 
@@ -220,7 +228,7 @@ def doFull(x):
 start_dir=sys.argv[1]
 if start_dir.endswith('.png'):
     json_path = sys.argv[2]
-    score = doOCR(start_dir,json_path)
+    score,w2h = doOCR(start_dir,json_path)
     print(score)
 else:
     N=20
