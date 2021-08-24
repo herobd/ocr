@@ -26,7 +26,7 @@ def addLine(cur_line,cur_para):
         #print(line_text)
         cur_para['lines'].append(cur_line)
 
-def doOCR(img,out_path):
+def doOCR(img,out_path,Rotation=0):
 
     try:
         d = pytesseract.image_to_data(img, output_type=Output.DICT)
@@ -94,6 +94,7 @@ def doOCR(img,out_path):
     line_num=-1
     confs_sum=0
     confs_count=0
+    w_to_h_sum=0
     for level,pg,blk,par,ln,wn,l,t,w,h,cnf,text in zip(*[d[k] for k in keys]):
         #print('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(lev,pg,blk,par,ln,wn,l,t,w,h,cnf,text))
         assert pg==1
@@ -135,6 +136,7 @@ def doOCR(img,out_path):
             confs_sum += cnf
             confs_count += 1
             text = text.strip()
+            w_to_h_sum += w/h if h>0 else w
             if int(cnf)>THRESHOLD and len(text)>0 and len(text.replace('-',''))>0: #confidence threshold, and more than just whitespace or line
                 cur_line['words'].append({'box':bb, 'text':text})
 
@@ -145,30 +147,37 @@ def doOCR(img,out_path):
             
 
     with open(out_path,'w') as f:
-        json.dump({'height':image_h,'width':image_w,'blocks':blocks},f,indent=2)
-    return confs_sum/confs_count if confs_count>0 else 0
+        json.dump({
+            'height':image_h,
+            'width':image_w,
+            'blocks':blocks,
+            'mean_conf': confs_sum/confs_count if confs_count>0 else 0,
+            'rotation': Rotation
+            },f,indent=2)
+    print((confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None))
+    return (confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None)
 
 def doFull(x):
     image_path,json_path=x
-    conf=doOCR(image_path,json_path)
+    conf,w_to_h=doOCR(image_path,json_path)
     #print('{} conf: {}'.format(file_name,conf))
-    if conf<80: # we probably have a rotated image on our hands
+    if conf<80 or w_to_h<1: # we probably have a rotated image on our hands
 
         #try rotating 90, 270, and 180
         conf180=conf270=-1
         os.system('convert {} -rotate 90 {}'.format(image_path,image_path+'.90.tmp'))
         assert os.path.exists(image_path+'.90.tmp')
-        conf90=doOCR(image_path+'.90.tmp',json_path+'.90.tmp')
+        conf90,w_to_h90=doOCR(image_path+'.90.tmp',json_path+'.90.tmp',90)
         assert os.path.exists(json_path+'.90.tmp')
-        if conf90<80: #cut short if hight enough conf (speed)
+        if conf90<80 or w_to_h90<1: #cut short if hight enough conf (speed)
             os.system('convert {} -rotate 270 {}'.format(image_path,image_path+'.270.tmp'))
             assert os.path.exists(image_path+'.270.tmp')
-            conf270=doOCR(image_path+'.270.tmp',json_path+'.270.tmp')
+            conf270,w_to_h270=doOCR(image_path+'.270.tmp',json_path+'.270.tmp',270)
             assert os.path.exists(json_path+'.270.tmp')
-            if conf270<80:
+            if conf270<80 or w_to_h270<1:
                 os.system('convert {} -rotate 180 {}'.format(image_path,image_path+'.180.tmp'))
                 assert os.path.exists(image_path+'.180.tmp')
-                conf180=doOCR(image_path+'.180.tmp',json_path+'.180.tmp')
+                conf180,w_to_h180=doOCR(image_path+'.180.tmp',json_path+'.180.tmp',180)
                 assert os.path.exists(json_path+'.180.tmp')
 
         #print('{} 90 conf: {}'.format(file_name,conf90))
