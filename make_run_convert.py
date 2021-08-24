@@ -2,14 +2,14 @@ script_template="""#!/bin/bash
 
 #SBATCH --dependency=afterok:{}
 #SBATCH --time=1:00:00   # walltime
-#SBATCH --nice
 #SBATCH --ntasks=2
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
 #SBATCH -J "convert {}"
-#SBATCH --mem-per-cpu=12048M
+#SBATCH --mem-per-cpu=24048M
 #SBATCH --mail-user=herobd@gmail.com   # email address
 #SBATCH --mail-type=FAIL
+{}
 #xxSBATCH --qos=standby   
 #xxSBATCH --requeue
 #xxSBATCH -C pascal
@@ -58,8 +58,12 @@ last_job_id=job_info[-1]
 #    add = 'tar -xf tars/images.{}.tar'.format(sec)
 #else:
 #    add = ''
+if sec=='a.f.a':
+    extra='#SBATCH --mail-type=END'
+else:
+    extra=''
 
-script = script_template.format(last_job_id,sec,out_dir,untarred_dir,out_dir)
+script = script_template.format(last_job_id,sec,extra,out_dir,untarred_dir,out_dir)
 
 
 with open('runs/run_convert_{}.pbs'.format(sec),'w') as f:

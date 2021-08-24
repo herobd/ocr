@@ -1,15 +1,15 @@
 script_template="""#!/bin/bash
 
 #SBATCH --dependency=afterok:{}
-#SBATCH --time=10:00:00   # walltime
-#SBATCH --nice
-#SBATCH --ntasks=11
+#SBATCH --time=3:00:00   # walltime
+#SBATCH --ntasks=21
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
 #SBATCH -J "ocr {}"
 #SBATCH --mem-per-cpu=8048M
 #SBATCH --mail-user=herobd@gmail.com   # email address
 #SBATCH --mail-type=FAIL
+{}
 #xxSBATCH --qos=standby   
 #xxSBATCH --requeue
 #xxSBATCH -C pascal
@@ -49,8 +49,12 @@ job_info = job_info.split(' ')
 last_job_id=job_info[-1]
 #print('ocr depends on {}'.format(last_job_id))
 
+if sec=='a.f.a':
+    extra='#SBATCH --mail-type=END'
+else:
+    extra=''
 
-script = script_template.format(last_job_id,sec,out_dir)
+script = script_template.format(last_job_id,sec,extra,out_dir)
 
 with open('runs/run_ocr_{}.pbs'.format(sec),'w') as f:
     f.write(script)

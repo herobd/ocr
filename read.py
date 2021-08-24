@@ -28,7 +28,60 @@ def addLine(cur_line,cur_para):
 
 def doOCR(img,out_path):
 
-    d = pytesseract.image_to_data(img, output_type=Output.DICT)
+    try:
+        d = pytesseract.image_to_data(img, output_type=Output.DICT)
+    except pytesseract.pytesseract.TesseractError as e:
+        print('Tesseract failed to read: {}'.format(img))
+        print(e)
+        if not img.endswith('tmp'):
+            #re-convert
+            #~/compute/outA/A.B/A.B.C/image.png
+            #~/compute/imagesA/A/B/C/map.csv
+            _,orig_file_name = os.path.split(img)
+            dash = orig_file_name.rfind('-')
+            if dash>-1 and len(orig_file_name)-dash<9:
+                id_file_name=orig_file_name[:dash]
+                page_num = int(orig_file_name[dash+1:-4])
+            else:
+                id_file_name=orig_file_name[:4] #remove '.png'
+                page_num=0
+            A,B,C = img.split('/')[-2].split('.')
+            map_file = os.path.join('..','compute','images{}'.format(A),A,B,C,'map.csv')
+            #os.system('mkdir tmp{}{}{}'.format(A,B,C))
+            with open(map_file) as f:
+                lines = f.readlines()
+            for line in  lines:
+                file_name,path = line.split(',')
+                if file_name == id_file_name:
+                    break
+            if file_name != id_file_name:
+                #bad dash thing?
+                assert dash>-1
+                if len(orig_file_name)-dash<9:
+                    #read page num when we shou;dn't have
+                    id_file_name=orig_file_name[:4]
+                    page_num=0
+                else:
+                    #didn't read page num when we should have (1000 pages????)
+                    id_file_name=orig_file_name[:dash]
+                    page_num = int(orig_file_name[dash+1:-4])
+                for line in  lines:
+                    file_name,path = line.strip().split(',')
+                    if file_name == id_file_name:
+                        break
+            assert file_name == id_file_name
+            print('convert {}[{}] {}'.format(path.strip(),page_num,img))
+            os.system('convert {}[{}] {}'.format(path.strip(),page_num,img)) #only convert with this page
+            #os.system('convert {} tmp{}{}{}/{}.png'.format(path,A,B,C,if_file_name))
+            #os.system('mv tmp{}{}{}/{} img'.format(A,B,C,orig_file_name,img))
+            #os.system('rm -r tmp{}{}{}'.format(A,B,C))
+
+            try: 
+                d = pytesseract.image_to_data(img, output_type=Output.DICT)
+            except pytesseract.pytesseract.TesseractError as e:
+                print('Tesseract failed to read a SECOND TIME: {}'.format(img))
+                print(e)
+                return None
 
     keys=['level', 'page_num', 'block_num', 'par_num', 'line_num', 'word_num', 'left', 'top', 'width', 'height', 'conf', 'text']
 
@@ -104,25 +157,37 @@ def doFull(x):
         #try rotating 90, 270, and 180
         conf180=conf270=-1
         os.system('convert {} -rotate 90 {}'.format(image_path,image_path+'.90.tmp'))
+        assert os.path.exists(image_path+'.90.tmp')
         conf90=doOCR(image_path+'.90.tmp',json_path+'.90.tmp')
+        assert os.path.exists(json_path+'.90.tmp')
         if conf90<80: #cut short if hight enough conf (speed)
             os.system('convert {} -rotate 270 {}'.format(image_path,image_path+'.270.tmp'))
+            assert os.path.exists(image_path+'.270.tmp')
             conf270=doOCR(image_path+'.270.tmp',json_path+'.270.tmp')
+            assert os.path.exists(json_path+'.270.tmp')
             if conf270<80:
                 os.system('convert {} -rotate 180 {}'.format(image_path,image_path+'.180.tmp'))
+                assert os.path.exists(image_path+'.180.tmp')
                 conf180=doOCR(image_path+'.180.tmp',json_path+'.180.tmp')
+                assert os.path.exists(json_path+'.180.tmp')
 
         #print('{} 90 conf: {}'.format(file_name,conf90))
 
         best = max(conf,conf90,conf180,conf270) #select best rotation
         #then move the tmp files to the permenats, (replace json and png)
         if best==conf90:
+            assert os.path.exists(json_path+'.90.tmp')
+            assert os.path.exists(image_path+'.90.tmp')
             os.system('mv {} {}'.format(json_path+'.90.tmp',json_path))
             os.system('mv {} {}'.format(image_path+'.90.tmp',image_path))
         elif best==conf180:
+            assert os.path.exists(json_path+'.180.tmp')
+            assert os.path.exists(image_path+'.180.tmp')
             os.system('mv {} {}'.format(json_path+'.180.tmp',json_path))
             os.system('mv {} {}'.format(image_path+'.180.tmp',image_path))
         elif best==conf270:
+            assert os.path.exists(json_path+'.270.tmp')
+            assert os.path.exists(image_path+'.270.tmp')
             os.system('mv {} {}'.format(json_path+'.270.tmp',json_path))
             os.system('mv {} {}'.format(image_path+'.270.tmp',image_path))
         ##print('do rm? not ({} and {} and {})'.format(best==conf90,conf180==-1 ,conf270==-1))
@@ -144,6 +209,7 @@ def doFull(x):
 
 
 start_dir=sys.argv[1]
+N=20
 
 todo=[]
 for root,dirs,files in os.walk(start_dir):
@@ -154,7 +220,7 @@ for root,dirs,files in os.walk(start_dir):
             if not os.path.exists(json_path):
                 todo.append((image_path,json_path))
 
-pool = Pool(processes=10)
+pool = Pool(processes=N)
 chunk = 5
 created = pool.imap_unordered(doFull, todo, chunksize=chunk)
 for score in created:

@@ -48,8 +48,13 @@ def redoLayout(image_path,draw=False,save=True):
 
     if os.path.exists(out_path) and save:
         return
-    with open(json_path) as f:
-        ocr = json.load(f)
+    try:
+        with open(json_path) as f:
+            ocr = json.load(f)
+    except json.decoder.JSONDecodeError as e:
+        print(e)
+        print('failed to read {}'.format(json_path))
+        return
     if len(ocr['blocks'])==0:
         os.system('cp {} {}'.format(json_path,out_path))
         return
@@ -233,8 +238,8 @@ def redoLayout(image_path,draw=False,save=True):
         del new_blocks[eaten]
 
     #assert len(unadded)==0
-    if len(unadded)>0:
-        print('{} had {} unadded'.format(image_path,len(unadded)))
+    #if len(unadded)>0:
+        #print('{} had {} unadded'.format(image_path,len(unadded)))
     i=len(boxes)+1000
     for line in unadded:
         #print('new block for: {}'.format(line['text']))
