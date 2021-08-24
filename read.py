@@ -152,7 +152,7 @@ def doFull(x):
     image_path,json_path=x
     conf=doOCR(image_path,json_path)
     #print('{} conf: {}'.format(file_name,conf))
-    if conf<55: # we probably have a rotated image on our hands
+    if conf<80: # we probably have a rotated image on our hands
 
         #try rotating 90, 270, and 180
         conf180=conf270=-1
@@ -209,19 +209,24 @@ def doFull(x):
 
 
 start_dir=sys.argv[1]
-N=20
+if start_dir.endswith('.png'):
+    json_path = sys.argv[2]
+    score = doOCR(start_dir,json_path)
+    print(score)
+else:
+    N=20
 
-todo=[]
-for root,dirs,files in os.walk(start_dir):
-    for file_name in files:
-        if file_name.endswith('.png'):
-            image_path = os.path.join(root,file_name)
-            json_path = os.path.join(root,file_name.replace('.png','.ocr.json'))
-            if not os.path.exists(json_path):
-                todo.append((image_path,json_path))
+    todo=[]
+    for root,dirs,files in os.walk(start_dir):
+        for file_name in files:
+            if file_name.endswith('.png'):
+                image_path = os.path.join(root,file_name)
+                json_path = os.path.join(root,file_name.replace('.png','.ocr.json'))
+                if not os.path.exists(json_path):
+                    todo.append((image_path,json_path))
 
-pool = Pool(processes=N)
-chunk = 5
-created = pool.imap_unordered(doFull, todo, chunksize=chunk)
-for score in created:
-    pass
+    pool = Pool(processes=N)
+    chunk = 5
+    created = pool.imap_unordered(doFull, todo, chunksize=chunk)
+    for score in created:
+        pass
