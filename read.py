@@ -138,7 +138,7 @@ def doOCR(img,out_path,Rotation=0):
                 confs_count += 1
                 text = text.strip()
                 w_to_h_sum += w/h if h>0 else w
-                print(text,cnf)
+                #print(text,cnf)
             if int(cnf)>THRESHOLD and len(text)>0 and len(text.replace('-','').replace(' ',''))>0: #confidence threshold, and more than just whitespace or line
                 cur_line['words'].append({'box':bb, 'text':text})
 
@@ -156,7 +156,7 @@ def doOCR(img,out_path,Rotation=0):
             'mean_conf': confs_sum/confs_count if confs_count>0 else 0,
             'rotation': Rotation
             },f,indent=2)
-    print((confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None))
+    #print((confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None))
     return (confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None)
 
 def doFull(x):
