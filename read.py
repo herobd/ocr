@@ -95,6 +95,7 @@ def doOCR(img,out_path,Rotation=0):
     confs_sum=0
     confs_count=0
     w_to_h_sum=0
+    line_word_count = defaultdict(int)
     for level,pg,blk,par,ln,wn,l,t,w,h,cnf,text in zip(*[d[k] for k in keys]):
         #print('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(lev,pg,blk,par,ln,wn,l,t,w,h,cnf,text))
         assert pg==1
@@ -139,8 +140,9 @@ def doOCR(img,out_path,Rotation=0):
                 text = text.strip()
                 w_to_h_sum += w/h if h>0 else w
                 #print(text,cnf)
-            if int(cnf)>THRESHOLD and len(text)>0 and len(text.replace('-','').replace(' ',''))>0: #confidence threshold, and more than just whitespace or line
+            if (int(cnf)>THRESHOLD or line_word_count[ln]>1) and len(text)>0 and len(text.replace('-','').replace(' ',''))>0: #confidence threshold, and more than just whitespace or line
                 cur_line['words'].append({'box':bb, 'text':text})
+                line_word_count[ln]+=1
 
     addLine(cur_line,cur_para)
     addPara(cur_para,cur_block)

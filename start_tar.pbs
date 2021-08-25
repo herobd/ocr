@@ -4,7 +4,7 @@ ROOT=a
 mkdir ~/compute/out$ROOT
 
 #listR=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
-listR=(f g h i j k l m n o p q r s t u v w x y z)
+listR=(i j k l m n o p q r s t u v w x y z)
 #listR=(a b c f g)
 #listR=(h i j k l m n)
 #listR=(o p q r s t u)
