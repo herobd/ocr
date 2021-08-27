@@ -1,12 +1,12 @@
 script_template="""#!/bin/bash
 
 #SBATCH --dependency=afterok:{}
-#SBATCH --time=3:00:00   # walltime
-#SBATCH --ntasks=21
+#SBATCH --time=4:00:00   # walltime
+#SBATCH --ntasks={}
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
 #SBATCH -J "ocr {}"
-#SBATCH --mem-per-cpu=8048M
+#SBATCH --mem-per-cpu=4G
 #SBATCH --mail-user=herobd@gmail.com   # email address
 #SBATCH --mail-type=FAIL
 {}
@@ -32,9 +32,10 @@ module remove miniconda3
 source activate /fslhome/brianld/miniconda3/envs/new
 
 cd ~/ocr
-python read.py {}
+python read.py {} {}
 """
 import sys
+num_threads=10
 sec = sys.argv[1]
 a,b,c = sec.split('.')
 
@@ -49,12 +50,12 @@ job_info = job_info.split(' ')
 last_job_id=job_info[-1]
 #print('ocr depends on {}'.format(last_job_id))
 
-if sec=='a.f.a':
+if sec=='a.l.y':
     extra='#SBATCH --mail-type=END'
 else:
     extra=''
 
-script = script_template.format(last_job_id,sec,extra,out_dir)
+script = script_template.format(last_job_id,num_threads+1,sec,extra,out_dir,num_threads)
 
 with open('runs/run_ocr_{}.pbs'.format(sec),'w') as f:
     f.write(script)

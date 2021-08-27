@@ -1,7 +1,7 @@
 import layoutparser as lp
 import img_f
 import numpy as np
-import sys, json, os
+import sys, json, os, time
 from collections import defaultdict
 
 model1 = lp.Detectron2LayoutModel(
@@ -282,8 +282,13 @@ def redoLayout(image_path,draw=False,save=True):
             })
     ocr['blocks']=blocks
     if save:
-        with open(out_path,'w') as f:
-            json.dump(ocr,f,indent=2)
+        try:
+            with open(out_path,'w') as f:
+                json.dump(ocr,f,indent=2)
+        except OSError:
+            time.sleep(3)
+            with open(out_path,'w') as f:
+                json.dump(ocr,f,indent=2)
 
     #for line in unadded:
     #    x1,y1,x2,y2 = line['box']

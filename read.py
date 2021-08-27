@@ -1,7 +1,7 @@
 import pytesseract
 from pytesseract import Output
 from collections import defaultdict
-import json, sys, os
+import json, sys, os, time
 from multiprocessing import Pool, TimeoutError
 PAGE_LEVEL=1
 BLOCK_LEVEL=2
@@ -81,7 +81,7 @@ def doOCR(img,out_path,Rotation=0):
             except pytesseract.pytesseract.TesseractError as e:
                 print('Tesseract failed to read a SECOND TIME: {}'.format(img))
                 print(e)
-                return None
+                return None, None
 
     keys=['level', 'page_num', 'block_num', 'par_num', 'line_num', 'word_num', 'left', 'top', 'width', 'height', 'conf', 'text']
 
@@ -149,15 +149,25 @@ def doOCR(img,out_path,Rotation=0):
     addBlock(cur_block,blocks)
 
             
-
-    with open(out_path,'w') as f:
-        json.dump({
-            'height':image_h,
-            'width':image_w,
-            'blocks':blocks,
-            'mean_conf': confs_sum/confs_count if confs_count>0 else 0,
-            'rotation': Rotation
-            },f,indent=2)
+    try:
+        with open(out_path,'w') as f:
+            json.dump({
+                'height':image_h,
+                'width':image_w,
+                'blocks':blocks,
+                'mean_conf': confs_sum/confs_count if confs_count>0 else 0,
+                'rotation': Rotation
+                },f,indent=2)
+    except OSError:
+        time.sleep(3)
+        with open(out_path,'w') as f:
+            json.dump({
+                'height':image_h,
+                'width':image_w,
+                'blocks':blocks,
+                'mean_conf': confs_sum/confs_count if confs_count>0 else 0,
+                'rotation': Rotation
+                },f,indent=2)
     #print((confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None))
     return (confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None)
 
@@ -233,7 +243,10 @@ if start_dir.endswith('.png'):
     score,w2h = doOCR(start_dir,json_path)
     print(score)
 else:
-    N=20
+    if len(sys.argv)>2:
+        N = int(sys.argv[2])
+    else:
+        N=20
 
     todo=[]
     for root,dirs,files in os.walk(start_dir):
