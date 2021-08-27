@@ -17,6 +17,14 @@ model2 = lp.Detectron2LayoutModel(#'lp://PrimaLayout/mask_rcnn_R_50_FPN_3x/confi
     label_map={1:"TextRegion", 2:"ImageRegion", 3:"TableRegion", 4:"MathsRegion", 5:"SeparatorRegion", 6:"OtherRegion"},
     enforce_cpu=False)
 
+def deduplicate(lines):
+    new_lines=[]
+    boxes=set()
+    for line in lines:
+        b = tuple(line['boxes'])
+        if b not in boxes:
+            boxes.add(b)
+            new_lines.append(line)
 
 def computeIOU(bb1,bb2):
     a1 = (bb1[2]-bb1[0])*(bb1[3]-bb1[1])
@@ -277,7 +285,7 @@ def redoLayout(image_path,draw=False,save=True):
             'box':(min_x,min_y,max_x,max_y),
             'paragraphs':[{
                 'box':(min_x,min_y,max_x,max_y),
-                'lines':lines
+                'lines':deduplicate(lines)
                 }]
             })
     ocr['blocks']=blocks
