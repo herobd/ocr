@@ -3,6 +3,8 @@ from pytesseract import Output
 from collections import defaultdict
 import json, sys, os, time
 from multiprocessing import Pool, TimeoutError
+import subprocess
+import img_f
 PAGE_LEVEL=1
 BLOCK_LEVEL=2
 PARA_LEVEL=3
@@ -41,12 +43,17 @@ def doOCR(img,out_path,Rotation=0):
             dash = orig_file_name.rfind('-')
             if dash>-1 and len(orig_file_name)-dash<9:
                 id_file_name=orig_file_name[:dash]
-                page_num = int(orig_file_name[dash+1:-4])
+                try:
+                    page_num = int(orig_file_name[dash+1:-4])
+                except ValueError:
+                    dash = -1
+                    id_file_name=orig_file_name[:-4]
+                    page_num=0
             else:
-                id_file_name=orig_file_name[:4] #remove '.png'
+                id_file_name=orig_file_name[:-4] #remove '.png'
                 page_num=0
             A,B,C = img.split('/')[-2].split('.')
-            map_file = os.path.join('..','compute','images{}'.format(A),A,B,C,'map.csv')
+            map_file = os.path.join('..','compute','images{}'.format(A),A,B,C,'new_map.csv')
             #os.system('mkdir tmp{}{}{}'.format(A,B,C))
             with open(map_file) as f:
                 lines = f.readlines()
@@ -56,6 +63,11 @@ def doOCR(img,out_path,Rotation=0):
                     break
             if file_name != id_file_name:
                 #bad dash thing?
+                if dash<=-1:
+                    print('not dash issue? "{}" vs "{}"'.format(file_name,id_file_name))
+                    print('not dash issue? "{}" vs "{}"'.format(file_name,id_file_name),file=sys.stderr)
+                    with open('debug.log','a+') as f:
+                        f.write('not dash issue? "{}" vs "{}"\n'.format(file_name,id_file_name))
                 assert dash>-1
                 if len(orig_file_name)-dash<9:
                     #read page num when we shou;dn't have
@@ -76,12 +88,18 @@ def doOCR(img,out_path,Rotation=0):
             #os.system('mv tmp{}{}{}/{} img'.format(A,B,C,orig_file_name,img))
             #os.system('rm -r tmp{}{}{}'.format(A,B,C))
 
-            try: 
-                d = pytesseract.image_to_data(img, output_type=Output.DICT)
-            except pytesseract.pytesseract.TesseractError as e:
-                print('Tesseract failed to read a SECOND TIME: {}'.format(img))
-                print(e)
-                return None, None
+        elif img.endswith('.90.tmp'):
+            os.system('convert {} -rotate 90 {}'.format(img[:-7],img))
+        elif img.endswith('.180.tmp'):
+            os.system('convert {} -rotate 180 {}'.format(img[:-8],img))
+        elif img.endswith('.270.tmp'):
+            os.system('convert {} -rotate 270 {}'.format(img[:-8],img))
+        try: 
+            d = pytesseract.image_to_data(img, output_type=Output.DICT)
+        except pytesseract.pytesseract.TesseractError as e:
+            print('Tesseract failed to read a SECOND TIME: {}'.format(img))
+            print(e)
+            return 0, 0
 
     keys=['level', 'page_num', 'block_num', 'par_num', 'line_num', 'word_num', 'left', 'top', 'width', 'height', 'conf', 'text']
 
@@ -169,17 +187,67 @@ def doOCR(img,out_path,Rotation=0):
                 'rotation': Rotation
                 },f,indent=2)
     #print((confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None))
-    return (confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,None)
+    return (confs_sum/confs_count, w_to_h_sum/confs_count) if confs_count>0 else (0,0.1)
 
 def doFull(x):
+    MAIN_THRESH=55
     image_path,json_path=x
+    if os.path.exists(json_path):
+        #check if it has score
+        with open(json_path) as f:
+            try:
+                done_ocr = json.load(f)
+            except json.decoder.JSONDecodeError:
+                done_ocr = {}
+            if 'mean_conf' in done_ocr:
+                #is the score high enough
+                if done_ocr['mean_conf']>=MAIN_THRESH:
+                    #does ocr match image rotation?
+                    oheight = done_ocr['height']
+                    owidth = done_ocr['width']
+                    #get PNG dimensions using less (easy read to header info)
+                    res = subprocess.run(['less',image_path], stdout=subprocess.PIPE)
+                    try:
+                        res = res.stdout.decode("utf-8").split(' ')[2].split('x')
+                        iheight = int(res[1])
+                        iwidth = int(res[0])
+                    except IndexError:
+                        print('PNG header read failed for {}  :  {}'.format(image_path,res))
+                        iimg = img_f.imread(image_path)
+                        iheight = iimg.shape[0]
+                        iwidth = iimg.shape[1]
+                    if iheight==oheight and iwidth==owidth:
+                        #now see it this is an image needing rotated
+                        word_height = 0
+                        word_width = 0
+                        #word_count = 1
+                        for block in done_ocr['blocks']:
+                            for para in block['paragraphs']:
+                                for line in para['lines']:
+                                    for word in line['words']:
+                                        l,t,r,b = word['box']
+                                        word_height += b-t
+                                        word_width += r-l
+                                        #word_count +=1
+                        w_to_h = word_width/word_height if word_height>0 else -1
+                        if w_to_h>=1:
+                            #this ocr file is fine
+                            #print('pass on {}'.format(image_path))
+                            return done_ocr['mean_conf']
+    #print('doing {}'.format(image_path))
+
     conf,w_to_h=doOCR(image_path,json_path)
     #print('{} conf: {}'.format(file_name,conf))
     if conf<80 or w_to_h<1: # we probably have a rotated image on our hands
 
         #try rotating 90, 270, and 180
         conf180=conf270=-1
+        w_to_h90=.1
+        w_to_h180=.1
+        w_to_h270=.1
         os.system('convert {} -rotate 90 {}'.format(image_path,image_path+'.90.tmp'))
+        if not os.path.exists(image_path+'.90.tmp'):
+            os.system('convert {} -rotate 90 {}'.format(image_path,image_path+'.90.tmp'))
         assert os.path.exists(image_path+'.90.tmp')
         conf90,w_to_h90=doOCR(image_path+'.90.tmp',json_path+'.90.tmp',90)
         assert os.path.exists(json_path+'.90.tmp')
@@ -196,9 +264,14 @@ def doFull(x):
 
         #print('{} 90 conf: {}'.format(file_name,conf90))
 
+        conf *= min(1,w_to_h)
+        conf90 *= min(1,w_to_h90)
+        conf180 *= min(1,w_to_h180)
+        conf270 *= min(1,w_to_h270)
+
         best = max(conf,conf90,conf180,conf270) #select best rotation
         #then move the tmp files to the permenats, (replace json and png)
-        if best<55: #remove low confidence images (also no words)
+        if best<MAIN_THRESH: #remove low confidence images (also no words)
             os.system('rm {}'.format(image_path))
             os.system('rm {}'.format(json_path))
             best=-1
@@ -254,8 +327,8 @@ else:
             if file_name.endswith('.png'):
                 image_path = os.path.join(root,file_name)
                 json_path = os.path.join(root,file_name.replace('.png','.ocr.json'))
-                if not os.path.exists(json_path):
-                    todo.append((image_path,json_path))
+                #if not os.path.exists(json_path):
+                todo.append((image_path,json_path))
 
     pool = Pool(processes=N)
     chunk = 5

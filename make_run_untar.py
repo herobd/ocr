@@ -1,7 +1,7 @@
 script_template="""#!/bin/bash
 
 {}
-#SBATCH --time=1:00:00   # walltime
+#SBATCH --time=24:40:00   # walltime
 #SBATCH --ntasks=2
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
@@ -24,6 +24,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_ON_NODE
 
 
 cd ~/compute
+{}
 {}
 
 """
@@ -56,7 +57,18 @@ if not os.path.exists(untarred_dir):
 else:
     command = ''
 
-script = script_template.format(depend,sec,command)
+work_tar = '../compute/out{}/{}.{}.tar'.format(a,a,b)
+work_dir = '../compute/out{}/{}.{}'.format(a,a,b)
+make_work_dir = 'out{}/{}.{}'.format(a,a,b)
+
+if os.path.exists(work_tar) and not os.path.exists(work_dir):
+    command2 = 'cd out{}; tar -xf {}.{}.tar; cd ..'.format(a,a,b)
+elif not os.path.exists(work_dir):
+    command2 = 'mkdir {}'.format(make_work_dir)
+else:
+    command2 = ''
+
+script = script_template.format(depend,sec,command,command2)
 
 
 with open('runs/run_untar_{}.pbs'.format(sec),'w') as f:

@@ -1,7 +1,7 @@
 script_template="""#!/bin/bash
 
 #SBATCH --dependency=afterok:{}
-#SBATCH --time=1:00:00   # walltime
+#SBATCH --time=2:00:00   # walltime
 #SBATCH --ntasks=2
 #SBATCH --nodes=1
 #xxSBATCH --gres=gpu:1
@@ -58,7 +58,7 @@ last_job_id=job_info[-1]
 #    add = 'tar -xf tars/images.{}.tar'.format(sec)
 #else:
 #    add = ''
-if sec=='a.f.a':
+if sec=='aaac.a.a':
     extra='#SBATCH --mail-type=END'
 else:
     extra=''

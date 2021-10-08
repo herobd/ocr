@@ -3,8 +3,7 @@
 ROOT=a
 mkdir ~/compute/out$ROOT
 
-#listR=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
-listR=(l m n o p q r s t u v w x y z)
+listR=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
 #listR=(a b c f g)
 #listR=(h i j k l m n)
 #listR=(o p q r s t u)
@@ -14,10 +13,10 @@ listR=(l m n o p q r s t u v w x y z)
 for SUBROOT in ${listR[@]}; do
 
     TAR=$ROOT.$SUBROOT
-    mkdir ~/compute/out$ROOT/$TAR
+    #mkdir ~/compute/out$ROOT/$TAR
     
 
-    python make_run_untar.py $TAR BRIDGE.tmp
+    python make_run_untar.py $TAR BRIDGE$ROOT.tmp
     sbatch runs/run_untar_$TAR.pbs > $TAR.tmp
 
     list=(a b c d e f g h i j k l m n o p q r s t u v w x y z)
@@ -40,8 +39,8 @@ for SUBROOT in ${listR[@]}; do
         echo "start $SEC"
     done
     python make_run_dotar.py $TAR
-    sbatch runs/run_dotar_$TAR.pbs > BRIDGE.tmp
+    sbatch runs/run_dotar_$TAR.pbs > BRIDGE$ROOT.tmp
     rm $TAR.final.tmp
     rm $TAR.tmp
 done
-rm BRIDGE.tmp
+rm BRIDGE$ROOT.tmp

@@ -21,10 +21,11 @@ def deduplicate(lines):
     new_lines=[]
     boxes=set()
     for line in lines:
-        b = tuple(line['boxes'])
+        b = tuple(line['box'])
         if b not in boxes:
             boxes.add(b)
             new_lines.append(line)
+    return new_lines
 
 def computeIOU(bb1,bb2):
     a1 = (bb1[2]-bb1[0])*(bb1[3]-bb1[1])
@@ -52,11 +53,14 @@ def computeCovered(bb,bybb):
 
 def redoLayout(image_path,draw=False,save=True):
     json_path = image_path.replace('.png','.ocr.json')
-    out_path = image_path.replace('.png','.json')
+    out_path = image_path.replace('.png','.layout.json')
 
     if os.path.exists(out_path) and save:
         return
     try:
+        with open(json_path) as f:
+            ocr = json.load(f)
+    except OSError:
         with open(json_path) as f:
             ocr = json.load(f)
     except json.decoder.JSONDecodeError as e:
@@ -69,6 +73,9 @@ def redoLayout(image_path,draw=False,save=True):
 
     image = img_f.imread(image_path)
     orig_image = image
+    if image is None:
+        print('ERROR could not read {}'.format(image_path))
+        return
     width = image.shape[1]
     scale = 600/width
     image = img_f.resize(image,fx=scale,fy=scale,dim=[0,0]).astype(np.uint8)
@@ -281,13 +288,15 @@ def redoLayout(image_path,draw=False,save=True):
         if draw:
             img_f.rectangle(image,(min_x,min_y),(max_x,max_y),(0,0,255),7)
 
-        blocks.append({
-            'box':(min_x,min_y,max_x,max_y),
-            'paragraphs':[{
+        if max_y-min_y>0 or max_x-min_x>0:
+            #only add non-zero blocks
+            blocks.append({
                 'box':(min_x,min_y,max_x,max_y),
-                'lines':deduplicate(lines)
-                }]
-            })
+                'paragraphs':[{
+                    'box':(min_x,min_y,max_x,max_y),
+                    'lines':deduplicate(lines)
+                    }]
+                })
     ocr['blocks']=blocks
     if save:
         try:

@@ -1,7 +1,7 @@
 script_template="""#!/bin/bash
 
 #SBATCH --dependency=afterok:{}
-#SBATCH --time=3:00:00   # walltime
+#SBATCH --time=4:00:00   # walltime
 #SBATCH --ntasks=3
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
